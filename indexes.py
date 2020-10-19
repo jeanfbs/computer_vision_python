@@ -18,7 +18,9 @@ def mpri(G, R, B):
     return (G - R) / (G + R)
 
 def rgvbi(G, R, B):
-    return (G - (B * R))/ (np.power(G, 2) + (B * R))
+    aux = (np.power(G, 2) + (B * R))
+    aux[aux == 0] = 255
+    return (G - (B * R)) / aux
 
 def ExG(G, R, B):
     return (2 * G) - R - B
@@ -29,24 +31,24 @@ def veg(G, R, B):
     return G / aux
 
 
-dataset = "GP"
+dataset = "JAI"
 indexesName = ["mgrvi", "gli", "mpri", "rgvbi", "ExG", "veg"]
 
 for indexName in indexesName:
 
+    print "running index: " + str(indexName)
     output = './{}/cortadas/{}/'.format(dataset, indexName)
     if not os.path.exists(output):
         os.makedirs(output)
 
     filenames = glob.glob("./{}/cortadas/images/*.tif".format(dataset))
-    images = [cv2.imread(img, 1) for img in filenames]    
     
-    img_number = 0
-    for orig in images:
+    for origFileName in filenames:
+
+        orig = cv2.imread(origFileName, 1)
         
-        fileName = filenames[img_number].replace('./{}/cortadas/images/'.format(dataset), '')
-        print 'processing image... :' + str(fileName)
-        
+        fileName = origFileName.replace('./{}/cortadas/images/'.format(dataset), '')
+        print 'processing image... :' + str(origFileName)
         image = cv2.cvtColor(orig, cv2.COLOR_BGR2RGB)
         image = np.float32(image)
 
@@ -55,14 +57,14 @@ for indexName in indexesName:
         G = image[:,:, 1]
         B = image[:,:, 2]
 
-
+       
         index = globals()[indexName](G, R, B)
         
         # reshape the image to a 2D array of pixels and 3 color values (RGB)
         pixel_values = index.reshape((-1, 1))
-
+        
         # convert to float
-        #pixel_values = np.float32(pixel_values)
+        pixel_values = np.float32(pixel_values)
 
         centers = np.float32([np.min(index), np.max(index)]).reshape(-1, 1)
         kmeans = KMeans(n_clusters=2, init=centers, max_iter=300).fit(pixel_values)
@@ -74,5 +76,8 @@ for indexName in indexesName:
         binOutput[:, :, 1] = newPixel
         binOutput[:, :, 2] = newPixel
 
-        io.imsave(output + fileName, binOutput)
-        img_number = img_number + 1
+        kernel = np.ones((7,7))
+        closing = cv2.morphologyEx(binOutput, cv2.MORPH_OPEN, kernel)
+        
+        io.imsave(output + fileName, closing)
+        
